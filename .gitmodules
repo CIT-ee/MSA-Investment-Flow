@@ -1,0 +1,3 @@
+[submodule "src/data/msa_mapper"]
+	path = src/data/msa_mapper
+	url = https://github.com/CIT-ee/MSA-Location-Mapper.git
