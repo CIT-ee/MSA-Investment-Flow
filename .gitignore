@@ -3,3 +3,4 @@ config/
 
 *.swp
 *.pyc
+.ipynb_checkpoints/
