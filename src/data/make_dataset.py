@@ -4,44 +4,15 @@ import os, sys, argparse, pdb
 sys.path.insert(0, os.environ['PROJECT_PATH'])
 
 import subprocess, pandas as pd
+from datetime import datetime
 
 from config.resources import path_to
+from config.api_specs import fields
 from src.data.msa_mapper.map_loc_to_msa import MSAMapper
+from src.data.utils import fetch_investments
 
-def setup_raw_data_dump():
-    subprocess.call('./src/data/setup_data_dump.sh')
-
-def map_investor_investee(path_to_dest): 
-    print('\nPreparing to form investor - investee bridge. Please wait..')
-
-    #  load the dataframes necessary for the join
-    investments_df = pd.read_csv(path_to['investments'], encoding='latin1')
-    investors_df = pd.read_csv(path_to['investors'], encoding='latin1')
-    funding_rounds_df = pd.read_csv(path_to['funding_rounds'], encoding='latin1')
-    
-    #  list out the fields needed from either dataframe
-    investor_fields = ['uuid', 'investor_name', 'country_code', 'state_code', 'city', 'investor_type' ]
-    funding_rounds_fields = [ 'funding_round_uuid', 'company_uuid', 'country_code', 'state_code', 'city', 'investment_type', 'raised_amount_usd' ]
-    
-    #  filter out the unnecessary fields from either dataframe
-    investors_df = investors_df[investor_fields]
-    funding_rounds_df = funding_rounds_df[funding_rounds_fields]
-
-    #  join investment with investors
-    investment_investor_bridge = pd.merge(investments_df, investors_df, 
-                                        left_on='investor_uuid', right_on='uuid')
-
-    #  drop redundant fields
-    investment_investor_bridge.drop('uuid', inplace=True, axis=1)
-
-    #  join investors-investment bridge with investees
-    investor_investee_bridge = pd.merge(investment_investor_bridge, 
-                                        funding_rounds_df, how='left', 
-                                        on='funding_round_uuid', 
-                                        suffixes=('_investors', '_investees'))
-
-    print('Investor - investee bridge formed! Dumping data to {}'.format(path_to_dest))
-    investor_investee_bridge.to_csv(path_to_dest, index=False, encoding='latin1')
+def setup_raw_data_dump(fname):
+    subprocess.call( [ './src/data/setup_data_dump.sh', fname ] )
 
 def _add_msa_data(source_df, suffix):
     msa_mapper_investor = MSAMapper(source_df.fillna(''))
@@ -50,64 +21,67 @@ def _add_msa_data(source_df, suffix):
     source_df.rename(column_renamer, axis=1, inplace=True)
     return source_df
 
-def filter_data(path_to_src, path_to_dest, investment_type, investor_type, 
-                add_msa_data, country_code='USA'):
-    print('\nPreparing to filter out non relevant data. Please wait..')
+def _add_fr_data(data, fr_data, fields):
+    final_data = data.copy()
+    final_data.update(fr_data[ fields ].to_dict())
+    return final_data
 
-    #  filter out non US countries
-    master_df = pd.read_csv(path_to_src, encoding='latin1')
+def filter_investments(path_to_src, nb_years):
+    print('\nPreparing to filter dataframe. Please wait ..')
+    source_df = pd.read_csv(path_to_src, encoding='latin1')
 
-    master_df = master_df[master_df['country_code_investees'] == country_code]
-    master_df = master_df[master_df['country_code_investors'] == country_code]
+    #  filter out data before `nb_years` from today
+    curr_year = datetime.now().year + 1
+    year_range = list(map(str, range(curr_year - nb_years, curr_year)))
 
-    #  filter out non relevant investor and investment types
-    filtered_by_investment_df = master_df[master_df['investor_type'] == investor_type]
-    filtered_by_investor_df = master_df[master_df['investment_type'] == investment_type]
-    filtered_df = pd.merge(filtered_by_investor_df, filtered_by_investment_df, 
-                            how='inner', on=master_df.columns.tolist())
+    source_df['announced_on'] = pd.to_datetime(source_df['announced_on'])
+    source_df = source_df[source_df['announced_on'].dt.year.isin(year_range) ]
 
-    print('Filtering out non relevant data completed!\n')
+    #  filter out funding rounds which may not have tangible location data
+    print('Filtering dataframe completed!\n')
+    return source_df[ source_df['company_name'] != 'Distributed ID' ].reset_index()
 
-    if add_msa_data:
-        investor_loc_df = filtered_df[ ['city_investors', 'state_code_investors', 'country_code_investors'] ]
-        investee_loc_df = filtered_df[ ['city_investees', 'state_code_investees', 'country_code_investees'] ]
-        
-        #  map investor locations to msa
-        print('\nPreparing to add msa data to investor locations')
-        investor_loc_df = _add_msa_data(investor_loc_df, '_investors')
-        common_columns = investor_loc_df.columns.tolist()[:3]
-        filtered_df = pd.merge(filtered_df, investor_loc_df, how='inner', 
-                                on=common_columns).drop_duplicates()
+def build_investment_flow_df(source_df, path_to_dest, fields):
+    #  set the url template
+    url_template = "https://api.crunchbase.com/v3.1/funding-rounds/{uuid}/{relationship}?user_key={api_key}"
+    
+    nrows, _ = source_df.shape
+    df_batches = []
+    print('\nPreparing to build investment dataframe. Please wait..')
+    for index, row in source_df.iterrows():
+        print('Processed {} of {} funding rounds'.format(index, nrows), end='\r', )
+        pdb.set_trace()
+        uuid, rel_name = row['funding_round_uuid'], 'investments'
+        url = url_template.format(uuid=uuid, relationship=rel_name, api_key=os.environ['CRUNCHBASE_API_KEY'])
 
-        #  map investee locations to msa
-        print('\nPreparing to add msa data to investee locations')
-        investee_loc_df = _add_msa_data(investee_loc_df, '_investees')
-        common_columns = investee_loc_df.columns.tolist()[:3]
-        filtered_df = pd.merge(filtered_df, investee_loc_df, how='inner', 
-                                on=common_columns).drop_duplicates()
+        investment_data = fetch_investments(url, fields['relationships'].keys(), None)
+        if len(investment_data) > 0:
+            funding_round_data = list(map(lambda x: _add_fr_data(x, row, fields['properties']), investment_data))
+            df_batches.append(pd.DataFrame(funding_round_data))
 
-    print('Dumping data to {}'.format(path_to_dest))
-    filtered_df.to_csv(path_to_dest, index=False, encoding='latin1')
+    dest_df = pd.concat(df_batches).reset_index()
+
+    #  format the column names to a more readable format
+    col_renamer = lambda x: x if x not in fields['relationships'].keys() else fields['relationships'][x]
+    dest_df.rename(col_renamer, axis='columns', inplace=True)
+
+    print('Building investment dataframe completed!. Dumping data to {}\n'.format(path_to_dest))
+    dest_df.to_csv(path_to_dest, encoding='latin1', index=False)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--op', default='invst2org', help='operation to perform')
-    parser.add_argument('--investment', default='series_a', help='type of investment to focus on')
-    parser.add_argument('--investor', default='angel_group', help='type of investor to focus on')
-    parser.add_argument('--map_msa', action='store_true', help='flag: add msa data or not')
     
     args = parser.parse_args()
 
     if args.op == 'dump_data':
-        setup_raw_data_dump() 
+        fname = raw_input('Please enter the name of the data dump you want to setup: ')
+        setup_raw_data_dump(fname) 
 
-    elif args.op == 'invst2org':
-        map_investor_investee(path_to['investment_flow_master'])
+    elif args.op == 'map_investments':
+        path_to_src = path_to['csv_export'].format('funding_rounds')
+        path_to_dest = path_to['investment_flow_master']
 
-    elif args.op == 'filter_data':
-        path_to_data = path_to['investment_flow_master']
-        path_to_dump = path_to['filtered_data'].format(args.investment, args.investor)
-        assert os.path.exists(path_to_data), \
-            'Please build investor - investee master data first!'
-        filter_data(path_to_data, path_to_dump, args.investment, args.investor, args.map_msa)
+        source_df = filter_investments(path_to_src, 3)
+        build_investment_flow_df(source_df, path_to_dest, fields['funding_rounds'])
