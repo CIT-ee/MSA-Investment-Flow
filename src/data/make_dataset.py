@@ -14,12 +14,14 @@ from src.data.utils import fetch_investments
 def setup_raw_data_dump(fname):
     subprocess.call( [ './src/data/setup_data_dump.sh', fname ] )
 
-def _add_msa_data(source_df, suffix):
-    msa_mapper_investor = MSAMapper(source_df.fillna(''))
-    source_df = msa_mapper_investor.map_data()
-    column_renamer = lambda x: x.lower() + suffix if suffix not in x else x
-    source_df.rename(column_renamer, axis=1, inplace=True)
-    return source_df
+def add_msa_data(source_df):
+    loc_cols = [ 'city', 'state_code', 'country_code' ]
+    loc_df = source_df.dropna()[ loc_cols ]
+
+    msa_mapper = MSAMapper(loc_df.fillna(''))
+    augmented_loc_df = msa_mapper.map_data()
+
+    return pd.concat( (augmented_loc_df.iloc[:, -5:], source_df), axis=1)
 
 def _add_fr_data(data, fr_data, fields):
     final_data = data.copy()
@@ -78,6 +80,15 @@ if __name__ == '__main__':
     if args.op == 'dump_data':
         fname = raw_input('Please enter the name of the data dump you want to setup: ')
         setup_raw_data_dump(fname) 
+
+    elif args.op == 'add_msa':
+        path_to_source = path_to['csv_export'].format('funding_rounds')
+        path_to_dump = path_to['augmented_csv'].format('funding_rounds')
+
+        source_df = pd.read_csv(path_to_source, encoding='latin1')
+        augmented_df = add_msa_data(source_df)
+
+        augmented_df.to_csv(path_to_dump, index=False, encoding='latin1')
 
     elif args.op == 'map_investments':
         path_to_src = path_to['csv_export'].format('funding_rounds')
