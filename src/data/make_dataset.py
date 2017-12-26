@@ -11,13 +11,20 @@ from config.api_specs import fields
 from src.data.msa_mapper.map_loc_to_msa import MSAMapper
 from src.data.utils import fetch_investments
 
-def setup_raw_data_dump(fname):
-    subprocess.call( [ './src/data/setup_data_dump.sh', fname ] )
-
 def _add_fr_data(data, fr_data, fields):
     final_data = data.copy()
     final_data.update(fr_data[ fields ].to_dict())
     return final_data
+
+def _assert_paths(path_to_source, g):
+    assert os.path.exists(path_to_source), \
+        'Please create file at {} first!'.format(path_to_source)
+
+    assert os.path.exists(os.path.dirname(g)), \
+        'Please create directory at {} first!'.format(os.path.dirname(g))
+
+def setup_raw_data_dump(fname):
+    subprocess.call( [ './src/data/setup_data_dump.sh', fname ] )
 
 def filter_investments(path_to_src, nb_years):
     print('\nPreparing to filter dataframe. Please wait ..')
@@ -34,7 +41,7 @@ def filter_investments(path_to_src, nb_years):
     print('Filtering dataframe completed!\n')
     return source_df[ source_df['company_name'] != 'Distributed ID' ].reset_index()
 
-def build_investment_flow_df(source_df, path_to_dest, fields):
+def build_investment_flow_df(source_df, g, fields):
     #  set the url template
     url_template = "https://api.crunchbase.com/v3.1/funding-rounds/{uuid}/{relationship}?user_key={api_key}"
     
@@ -58,8 +65,8 @@ def build_investment_flow_df(source_df, path_to_dest, fields):
     col_renamer = lambda x: x if x not in fields['relationships'].keys() else fields['relationships'][x]
     dest_df.rename(col_renamer, axis='columns', inplace=True)
 
-    print('Building investment dataframe completed!. Dumping data to {}\n'.format(path_to_dest))
-    dest_df.to_csv(path_to_dest, encoding='latin1', index=False)
+    print('Building investment dataframe completed!. Dumping data to {}\n'.format(g))
+    dest_df.to_csv(g, encoding='latin1', index=False)
 
 def batchify_data(path_to_source, path_to_dump, batch_size):
     source_df = pd.read_csv(path_to_source, encoding='latin1')
@@ -75,10 +82,11 @@ def batchify_data(path_to_source, path_to_dump, batch_size):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--op', default='invst2org', help='operation to perform')
-    parser.add_argument('--node', default='funding_rounds', help='crunchbase node/entity to work on')
+    parser.add_argument('--op', help='operation to perform')
+    parser.add_argument('--node', help='crunchbase node/entity to work on')
     parser.add_argument('--batch_size', type=int, help='size of batch to break data frame into')
-    
+    parser.add_argument('--batch', type=int, help='batch idx to operate on')
+
     args = parser.parse_args()
 
     if args.op == 'dump_data':
@@ -88,19 +96,26 @@ if __name__ == '__main__':
     elif args.op == 'batchify':
         assert args.batch_size is not None, 'Please batch size for dataframe batchification'
         
+        #  set the paths to source and destination
         path_to_source = path_to['csv_export'].format(args.node)
-        assert os.path.exists(path_to_source), \
-            'Please create file at {} first!'.format(path_to_source)
+        g = path_to['batch_csv'].format(node=args.node, idx='{idx}')
 
-        path_to_dest = path_to['batch_csv'].format(node=args.node, idx='{idx}')
-        assert os.path.exists(os.path.dirname(path_to_dest)), \
-            'Please create directory at {} first!'.format(os.path.dirname(path_to_dest))
+        _assert_paths(path_to_source, g)
 
-        batchify_data(path_to_source, path_to_dest, args.batch_size) 
+        batchify_data(path_to_source, g, args.batch_size) 
 
     elif args.op == 'map_investments':
-        path_to_src = path_to['csv_export'].format('funding_rounds')
-        path_to_dest = path_to['investment_flow_master']
+        assert args.node is not None, 'Please choose node to operate on first!'
+
+        #  set the paths to source and destination
+        if args.batch is None:
+            path_to_src = path_to['csv_export'].format(args.node)
+            g = path_to['scraped_csv'].format(node=args.node, name='investment_flow_master')
+        else:
+            path_to_src = path_to['batch_csv'].format(node=args.node, idx=args.batch)
+            g = path_to['batch_scraped_csv'].format(node=args.node, name='investment_flow', idx=args.batch)
+
+        _assert_paths(path_to_source, g)
 
         source_df = filter_investments(path_to_src, 3)
-        build_investment_flow_df(source_df, path_to_dest, fields['funding_rounds'])
+        build_investment_flow_df(source_df, g, fields['funding_rounds'])
