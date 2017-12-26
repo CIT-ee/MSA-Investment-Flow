@@ -14,15 +14,6 @@ from src.data.utils import fetch_investments
 def setup_raw_data_dump(fname):
     subprocess.call( [ './src/data/setup_data_dump.sh', fname ] )
 
-def add_msa_data(source_df):
-    loc_cols = [ 'city', 'state_code', 'country_code' ]
-    loc_df = source_df.dropna()[ loc_cols ]
-
-    msa_mapper = MSAMapper(loc_df.fillna(''))
-    augmented_loc_df = msa_mapper.map_data()
-
-    return pd.concat( (augmented_loc_df.iloc[:, -5:], source_df), axis=1)
-
 def _add_fr_data(data, fr_data, fields):
     final_data = data.copy()
     final_data.update(fr_data[ fields ].to_dict())
@@ -70,10 +61,23 @@ def build_investment_flow_df(source_df, path_to_dest, fields):
     print('Building investment dataframe completed!. Dumping data to {}\n'.format(path_to_dest))
     dest_df.to_csv(path_to_dest, encoding='latin1', index=False)
 
+def batchify_data(path_to_source, path_to_dump, batch_size):
+    source_df = pd.read_csv(path_to_source, encoding='latin1')
+    nrows, _ = source_df.shape
+
+    print('\nPreparing to batchify the dataframe. Please wait ..')
+    for _idx, start in enumerate(range(0, nrows, batch_size)):
+        stop = start + batch_size
+        batch_df = source_df.iloc[start:, :] if stop > nrows else source_df.iloc[start:stop, :]
+        batch_df.to_csv(path_to_dump.format(idx=_idx), encoding='latin1', index=False)
+    print('Batchification of dataframe completed!\n')
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--op', default='invst2org', help='operation to perform')
+    parser.add_argument('--node', default='funding_rounds', help='crunchbase node/entity to work on')
+    parser.add_argument('--batch_size', type=int, help='size of batch to break data frame into')
     
     args = parser.parse_args()
 
@@ -81,14 +85,18 @@ if __name__ == '__main__':
         fname = raw_input('Please enter the name of the data dump you want to setup: ')
         setup_raw_data_dump(fname) 
 
-    elif args.op == 'add_msa':
-        path_to_source = path_to['csv_export'].format('funding_rounds')
-        path_to_dump = path_to['augmented_csv'].format('funding_rounds')
+    elif args.op == 'batchify':
+        assert args.batch_size is not None, 'Please batch size for dataframe batchification'
+        
+        path_to_source = path_to['csv_export'].format(args.node)
+        assert os.path.exists(path_to_source), \
+            'Please create file at {} first!'.format(path_to_source)
 
-        source_df = pd.read_csv(path_to_source, encoding='latin1')
-        augmented_df = add_msa_data(source_df)
+        path_to_dest = path_to['batch_csv'].format(node=args.node, idx='{idx}')
+        assert os.path.exists(os.path.dirname(path_to_dest)), \
+            'Please create directory at {} first!'.format(os.path.dirname(path_to_dest))
 
-        augmented_df.to_csv(path_to_dump, index=False, encoding='latin1')
+        batchify_data(path_to_source, path_to_dest, args.batch_size) 
 
     elif args.op == 'map_investments':
         path_to_src = path_to['csv_export'].format('funding_rounds')
