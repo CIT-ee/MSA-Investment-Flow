@@ -26,9 +26,9 @@ def _assert_paths(path_to_source, path_to_dest):
 def setup_raw_data_dump(fname):
     subprocess.call( [ './src/data/setup_data_dump.sh', fname ] )
 
-def filter_investments(path_to_src, nb_years):
+def filter_investments(path_to_source, nb_years):
     print('\nPreparing to filter dataframe. Please wait ..')
-    source_df = pd.read_csv(path_to_src, encoding='latin1')
+    source_df = pd.read_csv(path_to_source, encoding='latin1')
 
     #  filter out data before `nb_years` from today
     curr_year = datetime.now().year + 1
@@ -50,7 +50,7 @@ def build_investment_flow_df(source_df, path_to_dest, fields):
     print('\nPreparing to build investment dataframe. Please wait..')
     for index, row in source_df.iterrows():
         print('Processed {} of {} funding rounds'.format(index, nrows), end='\r', )
-        pdb.set_trace()
+        #  pdb.set_trace()
         uuid, rel_name = row['funding_round_uuid'], 'investments'
         url = url_template.format(uuid=uuid, relationship=rel_name, api_key=os.environ['CRUNCHBASE_API_KEY'])
 
@@ -66,7 +66,7 @@ def build_investment_flow_df(source_df, path_to_dest, fields):
     dest_df.rename(col_renamer, axis='columns', inplace=True)
 
     print('Building investment dataframe completed!. Dumping data to {}\n'.format(path_to_dest))
-    dest_df.to_csv(path_to_dest, encoding='latin1', index=False)
+    dest_df.to_csv(path_to_dest, encoding='utf-8', index=False)
 
 def batchify_data(path_to_source, path_to_dump, batch_size):
     source_df = pd.read_csv(path_to_source, encoding='latin1')
@@ -109,13 +109,13 @@ if __name__ == '__main__':
 
         #  set the paths to source and destination
         if args.batch is None:
-            path_to_src = path_to['csv_export'].format(args.node)
+            path_to_source = path_to['csv_export'].format(args.node)
             path_to_dest = path_to['scraped_csv'].format(node=args.node, name='investment_flow_master')
         else:
-            path_to_src = path_to['batch_csv'].format(node=args.node, idx=args.batch)
+            path_to_source = path_to['batch_csv'].format(node=args.node, idx=args.batch)
             path_to_dest = path_to['batch_scraped_csv'].format(node=args.node, name='investment_flow', idx=args.batch)
 
         _assert_paths(path_to_source, path_to_dest)
 
-        source_df = filter_investments(path_to_src, 3)
+        source_df = filter_investments(path_to_source, 3)
         build_investment_flow_df(source_df, path_to_dest, fields['funding_rounds'])
