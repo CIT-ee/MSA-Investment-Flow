@@ -79,9 +79,6 @@ def add_msa_data(path_to_source, path_to_dest, src_loc_fields, dest_loc_fields, 
     src_loc_df = source_df[ src_loc_fields ]
     msa_mapping_client = MSAMapper(src_loc_df.fillna(''))
     dest_loc_df = msa_mapping_client.map_data(data_format)
-    
-    #  TODO: make this join more robust
-    pdb.set_trace()
     dest_df = pd.concat([ source_df, dest_loc_df[ dest_loc_fields ] ], axis=1)
 
     print('Adding MSA data to dataframe completed! Dumping data to {}'.format(path_to_dest))
@@ -149,10 +146,10 @@ if __name__ == '__main__':
         #  set the paths to source and destination
         if args.batch is None:
             path_to_source = path_to['csv_export'].format(args.node)
-            path_to_dest = path_to['scraped_csv'].format(node=args.node, name='investment_flow_master')
+            path_to_dest = path_to['scraped_csv'].format(name='investment_flow')
         else:
             path_to_source = path_to['batch_csv'].format(node=args.node, idx=args.batch)
-            path_to_dest = path_to['batch_scraped_csv'].format(node=args.node, name='investment_flow', idx=args.batch)
+            path_to_dest = path_to['batch_scraped_csv'].format(name='investment_flow', idx=args.batch)
 
         _assert_paths(path_to_source, path_to_dest)
 
