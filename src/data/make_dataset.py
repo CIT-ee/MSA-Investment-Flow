@@ -74,7 +74,7 @@ def add_msa_data(path_to_source, path_to_dest, src_loc_fields, dest_loc_fields, 
     source_df = pd.read_csv(path_to_source, encoding='latin1')
 
     #  filter the dataframe if its related to funding rounds
-    source_df = _filter_investments(source_df) if 'funding_rounds' in path_to_source else source_df
+    #  source_df = _filter_investments(source_df) if 'funding_rounds' in path_to_source else source_df
 
     print('\nPreparing to add MSA data to the data frame in question. Please wait ..')
     src_loc_df = source_df[ src_loc_fields ]
