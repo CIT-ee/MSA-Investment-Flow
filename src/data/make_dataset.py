@@ -51,7 +51,6 @@ def build_investment_flow_df(path_to_source, path_to_dest, fields):
     print('\nPreparing to build investment dataframe. Please wait..')
     for index, row in source_df.iterrows():
         print('Processed {} of {} funding rounds'.format(index, nrows), end='\r', )
-        #  pdb.set_trace()
         uuid, rel_name = row['funding_round_uuid'], 'investments'
         url = url_template.format(uuid=uuid, relationship=rel_name, api_key=os.environ['CRUNCHBASE_API_KEY'])
 
@@ -66,7 +65,9 @@ def build_investment_flow_df(path_to_source, path_to_dest, fields):
     col_renamer = lambda x: x if x not in fields['relationships'].keys() else fields['relationships'][x]
     dest_df.rename(col_renamer, axis='columns', inplace=True)
 
+    #  drop duplicates and dump to disk
     print('Building investment dataframe completed!. Dumping data to {}\n'.format(path_to_dest))
+    dest_df.drop_duplicates('investment_uuid')
     dest_df.to_csv(path_to_dest, encoding='utf-8', index=False)
 
 def add_msa_data(path_to_source, path_to_dest, src_loc_fields, dest_loc_fields, data_format):

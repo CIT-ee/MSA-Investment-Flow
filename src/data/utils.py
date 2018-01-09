@@ -35,7 +35,7 @@ def _make_api_call(url):
 
     sleep(pause_time) 
 
-    if res.status_code >= 400:
+    if res.status_code >= 400 and res.status_code != 404:
         print('URL in question: ', url)
         print(res.json())
         pdb.set_trace() #  TODO: deal with request errors
@@ -67,7 +67,11 @@ def _flatten_dict(d, delimiter=':'):
 def fetch_investments(url, fields, data):
     data = [] if data is None else data
 
-    items, next_page_url = _make_api_call(url)
+    #  return whatever data is captured if 404 is encountered
+    payload = _make_api_call(url)
+    if payload is None: return data 
+    
+    items, next_page_url = payload 
 
     #  check if there is data to parse in current page
     if len(items) > 0:
