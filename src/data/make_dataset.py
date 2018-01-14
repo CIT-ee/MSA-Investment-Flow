@@ -12,21 +12,41 @@ from src.data.msa_mapper.map_loc_to_msa import MSAMapper
 from src.data.utils import fetch_investments
 
 def _add_fr_data(data, fr_data, fields):
+    '''Add overall funding round data to the associated (collected) investment data
+    
+    Keyword arguments:
+    data -- the collected investment data associated to the funding round in
+            question ( default: {} )
+    fr_data -- all the funding round data to be considered for the investments
+                in question ( default: None )
+    fields -- the funding round data fields to add to the associated investment 
+                data ( default: [] )
+    '''
     final_data = data.copy()
     final_data.update(fr_data[ fields ].to_dict())
     return final_data
 
 def _assert_paths(path_to_source, path_to_dest):
+    '''Assert the paths provided are valid
+    
+    Keyword arguments:
+    path_to_source -- path to the source ( default: None )
+    path_to_dest -- path to the destination ( default: None )
+    '''
     assert os.path.exists(path_to_source), \
         'Please create file at {} first!'.format(path_to_source)
 
     assert os.path.exists(os.path.dirname(path_to_dest)), \
         'Please create directory at {} first!'.format(os.path.dirname(path_to_dest))
 
-def setup_raw_data_dump(fname):
-    subprocess.call( [ './src/data/setup_data_dump.sh', fname ] )
-
 def _filter_investments(source_df, nb_years=3):
+    ''' Filter out rows outside the provided year range and non US transactions
+    
+    Keyword arguments:
+    source_df -- the dataframe to filter on ( default: None )
+    nb_years -- number of years back from current year to form the year range 
+                ( default: 3 )
+    '''
     print('\nPreparing to filter dataframe. Please wait ..')
 
     #  filter out data before `nb_years` from today
@@ -40,7 +60,23 @@ def _filter_investments(source_df, nb_years=3):
     print('Filtering dataframe completed!\n')
     return source_df[ source_df['company_name'] != 'Distributed ID' ].reset_index()
 
+def setup_raw_data_dump(fname):
+    '''Execute the bash script to set up the raw data dump from Crunchbase'''
+    subprocess.call( [ './src/data/setup_data_dump.sh', fname ] )
+
 def build_investment_flow_df(path_to_source, path_to_dest, fields):
+    '''Build a dataframe consisting of investments between investor and invested-in 
+    organizations in each funding round present in the funding_rounds csv export
+    provided by the Crunchbase API
+    
+    Keyword arguments:
+    path_to_source -- path to csv export with funding rounds ( default: None )
+    path_to_dest -- path to csv file with details about investments in each 
+                    funding round ( default: None )
+    fields -- dictionary of fields/properties to scrape from the 
+                /funding-rounds/:uuid/:relationship_name endpoint of the 
+                Crunchbase API ( default: {} )
+    '''
     source_df = _filter_investments(pd.read_csv(path_to_source, encoding='latin1'))
 
     #  set the url template
@@ -71,6 +107,21 @@ def build_investment_flow_df(path_to_source, path_to_dest, fields):
     dest_df.to_csv(path_to_dest, encoding='utf-8', index=False)
 
 def add_msa_data(path_to_source, path_to_dest, src_loc_fields, dest_loc_fields, data_format):
+    '''Gathers MSA data (code and name) for the locations present in the dataframe 
+    in question and concatenates the colleced data to the same
+    
+    Keyword arguments:
+    path_to_source -- path to the source data frame (csv) to which the MSA data
+                        is to be added ( default: None )
+    path_to_dest -- path to the csv file with the dataframe augmented with the
+                    MSA data ( default: None )
+    src_loc_fields -- list of fields in the source dataframe to serve as the 
+                        geolocation basis for the process ( default: [] )
+    dest_loc_fields -- list of geolocation fields to be added to the dataframe,
+                        usually just the MSA name and code ( default: [] )
+    data_format -- qualifier to be supplied to the msa-mapping module, whether
+                    to start from an address or lat-lon pair ( default: address )
+    '''
     source_df = pd.read_csv(path_to_source, encoding='latin1')
 
     #  filter the dataframe if its related to funding rounds
@@ -86,6 +137,15 @@ def add_msa_data(path_to_source, path_to_dest, src_loc_fields, dest_loc_fields, 
     dest_df.to_csv(path_to_dest, encoding='utf-8', index=False)
 
 def batchify_data(path_to_source, path_to_dump, batch_size):
+    '''Break a dataframe up into smaller batches to support parallel execution
+    
+    Keyword arguments:
+    path_to_source -- path to the source dataframe (csv) to break up 
+                        ( default: None )
+    path_to_dump -- path to where the batched dataframes (csv) need to be dumped
+                    ( default: None )
+    batch_size -- size of the batches ( default: nrows of dataframe )
+    '''
     source_df = pd.read_csv(path_to_source, encoding='latin1')
     nrows, _ = source_df.shape
 
