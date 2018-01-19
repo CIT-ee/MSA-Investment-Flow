@@ -37,7 +37,6 @@ def _make_api_call(url):
 
     if res.status_code >= 400 and res.status_code != 404:
         print('URL in question: ', url)
-        print(res.json())
         pdb.set_trace() #  TODO: deal with request errors
                 
     # make sure the server responded with OK status
@@ -64,6 +63,7 @@ def _flatten_dict(d, delimiter=':'):
         [item for k, v in d.items() for item in _expand_key_value(k, v)]
     )
 
+
 def fetch_investments(url, fields, data):
     data = [] if data is None else data
 
@@ -89,6 +89,25 @@ def fetch_investments(url, fields, data):
             data = fetch_investments(next_page_url, fields, data)
 
     return data
+
+def get_chkpnt(path_to_chkpnt_dir, name=''):
+    path_to_chkpnts = path_to_chkpnt_dir.format(name=name)
+    #  check if the path to the checkpoint store exists
+    assert os.path.exists(path_to_chkpnts), \
+            "Sorry there is no checkpoint folder at {}".format(path_to_chkpnts)
+     
+    #  get list of paths to relevant checkpoints
+    checkpoints = [ os.path.join(path_to_chkpnts, fname) \
+                     for fname in os.listdir(path_to_chkpnts) ]
+
+    #  get the latest file (in terms of date created) in the list of checkpoints
+    latest_chkpnt = max(checkpoints, key=os.path.getctime)
+
+    #  extract information about stopping point in scraping process 
+    #  from the checkpoint filename
+    tokens = latest_chkpnt.split('.')[0].split('_')
+    numbers = [ int(token) for token in tokens if token.lstrip('-').isdigit()  ]
+    return numbers, latest_chkpnt
 
 if __name__ == '__main__':
     url_template = "https://api.crunchbase.com/v3.1/funding-rounds/{uuid}/{relationship}?user_key={api_key}"
