@@ -5,6 +5,12 @@ import requests
 from time import sleep
 
 def _throttle_request_rate_by(header):
+    '''Throttle the rate of sending out requests to adhere to the API in question's
+    specifications.
+
+    Keyword arguments:
+    header -- the response header for the associated request ( default: None )
+    '''
     try:
         num_req_remaining = int(header['X-RateLimit-Remaining'])
         time_to_ratelimit_reset = int(header['X-RateLimit-Reset'])
@@ -50,6 +56,14 @@ def _make_api_call(url):
     return None
 
 def _flatten_dict(d, delimiter=':'):
+    '''Flatten a nested a dictionary using a specified delimiter for concatenating
+    the nested keys
+    
+    Keyword arguments:
+    d -- nested dictionary to flatten ( default: {} )
+    delimiter -- delimiter to use to separate the nested key names when 
+                    concatenated in the flattened dictionary ( default: ':' )
+    '''
     def _expand_key_value(key, value):
         if isinstance(value, dict):
             return [
@@ -65,6 +79,15 @@ def _flatten_dict(d, delimiter=':'):
 
 
 def fetch_investments(url, fields, data):
+    '''Recursively scrape the API endpoint represented by the provided url for
+    the necessary data
+    
+    Keyword arguments:
+    url -- the url to make a request to ( default: None )
+    fields -- the fields to capture from the response body ( default: [] )
+    data -- list of dictionaries representing the data captured from the
+            endpoint so far ( default: None )
+    '''
     data = [] if data is None else data
 
     #  return whatever data is captured if 404 is encountered
@@ -91,6 +114,13 @@ def fetch_investments(url, fields, data):
     return data
 
 def get_chkpnt(path_to_chkpnt_dir, name=''):
+    '''Get the latest checkpoint and scraping statistics at that last checkpoint
+    to allow a seamless resume
+    
+    Keyword arguments:
+    path_to_chkpnt_dir -- template for path to the checkpoints directory ( default: '' )
+    name -- name of the checkpoints directory to focus on ( default: '' )
+    '''
     path_to_chkpnts = path_to_chkpnt_dir.format(name=name)
     #  check if the path to the checkpoint store exists
     assert os.path.exists(path_to_chkpnts), \
