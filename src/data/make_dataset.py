@@ -94,7 +94,7 @@ def setup_raw_data_dump(dump_id):
     '''
     subprocess.call( [ './src/data/setup_data_dump.sh', fname ] )
 
-def build_investment_flow_df(path_to_source, path_to_dest, fields):
+def build_investment_flow_df(path_to_source, path_to_dest, fields, save_freq, use_checkpoint):
     '''Build a dataframe consisting of investments between investor and invested-in 
     organizations in each funding round present in the funding_rounds csv export
     provided by the Crunchbase API
@@ -261,5 +261,5 @@ if __name__ == '__main__':
 
         _assert_paths(path_to_source, path_to_dest)
 
-        build_investment_flow_df(path_to_source, path_to_dest, fields['funding_rounds'],
+        build_investment_flow_df(path_to_source, path_to_dest, fields[args.node],
                                 save_freq, use_checkpoint)
