@@ -51,7 +51,7 @@ pytz==2017.3
 pyzmq==16.0.3
 qtconsole==4.3.1
 ratelim==0.1.6
-requests==2.18.4
+requests==2.20.0
 scandir==1.6
 scipy==1.0.0
 seaborn==0.8.1
